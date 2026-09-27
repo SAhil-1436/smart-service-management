@@ -22,6 +22,8 @@ const getAdminDashboardStats = asyncHandler(async (req, res) => {
   const resolvedTickets = await Ticket.countDocuments({ status: 'RESOLVED' });
   const closedTickets = await Ticket.countDocuments({ status: 'CLOSED' });
   const unassignedTickets = await Ticket.countDocuments({ assignedTo: null });
+  const flaggedTickets = await Ticket.countDocuments({ adminReviewRequired: true });
+  const followUpTickets = await Ticket.countDocuments({ adminFollowUpRequired: true });
 
   sendSuccess(res, {
     users: {
@@ -36,7 +38,9 @@ const getAdminDashboardStats = asyncHandler(async (req, res) => {
       inProgress: inProgressTickets,
       resolved: resolvedTickets,
       closed: closedTickets,
-      unassigned: unassignedTickets
+      unassigned: unassignedTickets,
+      flagged: flaggedTickets,
+      followUp: followUpTickets
     }
   }, 'Admin dashboard metrics retrieved successfully');
 });
@@ -157,6 +161,18 @@ const updateUserRole = asyncHandler(async (req, res) => {
     return sendError(res, 'The primary system administrator role cannot be altered.', 400);
   }
 
+  // Business Rule: Ordinary users cannot be casually promoted to STAFF without completed credential verification
+  if (role === 'STAFF') {
+    const approvedVerif = await StaffVerification.findOne({ user: user._id, status: 'APPROVED' });
+    if (!approvedVerif) {
+      return sendError(
+        res,
+        'Staff role elevation requires completed credential verification. Please review and approve the staff application under Staff Verifications.',
+        400
+      );
+    }
+  }
+
   user.role = role;
   await user.save();
 
@@ -166,6 +182,42 @@ const updateUserRole = asyncHandler(async (req, res) => {
     email: user.email,
     role: user.role
   }, `User role updated to ${role} successfully`);
+});
+
+/**
+ * @desc    Get complete user profile, ticket history and metrics for Admin
+ * @route   GET /api/admin/users/:id/history
+ * @access  Private (ADMIN)
+ */
+const getUserHistory = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id).select('-password');
+  if (!user) {
+    return sendError(res, 'User account not found', 404);
+  }
+
+  const tickets = await Ticket.find({ createdBy: user._id })
+    .populate('assignedTo', 'name email role')
+    .sort({ createdAt: -1 });
+
+  const verification = user.role === 'STAFF' || user.status === 'PENDING_VERIFICATION'
+    ? await StaffVerification.findOne({ user: user._id })
+    : null;
+
+  const summary = {
+    total: tickets.length,
+    open: tickets.filter((t) => ['PENDING', 'OPEN', 'ASSIGNED'].includes(t.status)).length,
+    inProgress: tickets.filter((t) => t.status === 'IN_PROGRESS').length,
+    resolved: tickets.filter((t) => t.status === 'RESOLVED').length,
+    closed: tickets.filter((t) => t.status === 'CLOSED').length
+  };
+
+  sendSuccess(res, {
+    user,
+    summary,
+    verification,
+    recentTickets: tickets.slice(0, 5),
+    allTickets: tickets
+  }, 'User profile and history retrieved successfully');
 });
 
 /**
@@ -296,6 +348,7 @@ module.exports = {
   getAdminDashboardStats,
   getAnalyticsData,
   getAllUsers,
+  getUserHistory,
   updateUserRole,
   updateUserStatus,
   getStaffVerifications,

@@ -4,8 +4,8 @@ const TicketHistory = require('../models/TicketHistory');
 const ALLOWED_TRANSITIONS = {
   PENDING: ['ASSIGNED', 'IN_PROGRESS', 'CLOSED'],
   OPEN: ['ASSIGNED', 'IN_PROGRESS', 'CLOSED'], // Retained for backwards compatibility
-  ASSIGNED: ['IN_PROGRESS', 'PENDING'],
-  IN_PROGRESS: ['RESOLVED', 'ASSIGNED'],
+  ASSIGNED: ['IN_PROGRESS', 'PENDING', 'CLOSED'],
+  IN_PROGRESS: ['RESOLVED', 'ASSIGNED', 'CLOSED'],
   RESOLVED: ['CLOSED', 'IN_PROGRESS'],
   CLOSED: []
 };

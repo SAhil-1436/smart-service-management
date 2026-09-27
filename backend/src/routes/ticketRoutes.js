@@ -6,12 +6,16 @@ const {
   getTicketById,
   updateTicket,
   deleteTicket,
-  addComment
+  addComment,
+  getCustomerHistory
 } = require('../controllers/ticketController');
 const {
   assignTicket,
   updateTicketStatus,
-  rejectTicket
+  rejectTicket,
+  flagTicket,
+  reviewFlaggedTicket,
+  updateAdminFollowUp
 } = require('../controllers/staffController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
@@ -21,6 +25,9 @@ router.route('/')
   .get(getTickets)
   .post(authorize('USER'), createTicket); // Only USER role is permitted to create service tickets
 
+// Customer History Route (accessible to Staff, Admin, and the Customer themselves)
+router.get('/customer/:customerId/history', getCustomerHistory);
+
 router.route('/:id')
   .get(getTicketById)
   .put(updateTicket)
@@ -29,6 +36,15 @@ router.route('/:id')
 router.put('/:id/assign', authorize('STAFF', 'ADMIN'), assignTicket);
 router.put('/:id/status', updateTicketStatus);
 router.put('/:id/reject', authorize('STAFF', 'ADMIN'), rejectTicket);
+
+// Staff Escalation & Flagging Route
+router.put('/:id/flag', authorize('STAFF', 'ADMIN'), flagTicket);
+
+// Admin Review & Decision Route
+router.put('/:id/admin-review', authorize('ADMIN'), reviewFlaggedTicket);
+
+// Admin Personal Follow-Up Route
+router.put('/:id/admin-followup', authorize('ADMIN'), updateAdminFollowUp);
 
 router.post('/:id/comments', addComment);
 

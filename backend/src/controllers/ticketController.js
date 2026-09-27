@@ -1,5 +1,6 @@
 const asyncHandler = require('express-async-handler');
 const Ticket = require('../models/Ticket');
+const User = require('../models/User');
 const Comment = require('../models/Comment');
 const TicketHistory = require('../models/TicketHistory');
 const generateTicketNumber = require('../utils/ticketNumberGenerator');
@@ -91,6 +92,14 @@ const getTickets = asyncHandler(async (req, res) => {
     query.priority = priority;
   }
 
+  if (req.query.flagged === 'true') {
+    query.adminReviewRequired = true;
+  }
+
+  if (req.query.followUp === 'true') {
+    query.adminFollowUpRequired = true;
+  }
+
   if (search) {
     query.$or = [
       { ticketNumber: { $regex: search, $options: 'i' } },
@@ -103,6 +112,8 @@ const getTickets = asyncHandler(async (req, res) => {
   const tickets = await Ticket.find(query)
     .populate('createdBy', 'name email role')
     .populate('assignedTo', 'name email role')
+    .populate('flaggedBy', 'name email')
+    .populate('assignedAdmin', 'name email')
     .sort({ createdAt: -1 });
 
   sendSuccess(res, tickets, `Retrieved ${tickets.length} tickets`);
@@ -116,7 +127,10 @@ const getTickets = asyncHandler(async (req, res) => {
 const getTicketById = asyncHandler(async (req, res) => {
   const ticket = await Ticket.findById(req.params.id)
     .populate('createdBy', 'name email role')
-    .populate('assignedTo', 'name email role');
+    .populate('assignedTo', 'name email role')
+    .populate('closedBy', 'name email role')
+    .populate('flaggedBy', 'name email role')
+    .populate('assignedAdmin', 'name email role');
 
   if (!ticket) {
     return sendError(res, 'Ticket not found', 404);
@@ -134,7 +148,75 @@ const getTicketById = asyncHandler(async (req, res) => {
     .populate('changedBy', 'name role email')
     .sort({ createdAt: -1 });
 
-  sendSuccess(res, { ticket, comments, history }, 'Ticket details retrieved successfully');
+  let ticketObject = ticket.toObject();
+
+  // Compute compact customer history summary for Staff and Admin
+  let customerHistorySummary = null;
+  if (['STAFF', 'ADMIN'].includes(req.user.role) && ticket.createdBy) {
+    const customerTickets = await Ticket.find({ createdBy: ticket.createdBy._id })
+      .select('ticketNumber title status priority category createdAt')
+      .sort({ createdAt: -1 });
+
+    customerHistorySummary = {
+      total: customerTickets.length,
+      open: customerTickets.filter((t) => ['PENDING', 'OPEN', 'ASSIGNED'].includes(t.status)).length,
+      inProgress: customerTickets.filter((t) => t.status === 'IN_PROGRESS').length,
+      resolved: customerTickets.filter((t) => t.status === 'RESOLVED').length,
+      closed: customerTickets.filter((t) => t.status === 'CLOSED').length,
+      recent: customerTickets.slice(0, 5)
+    };
+  }
+
+  // Security: Do not expose private admin notes or internal follow-up reasons to the customer
+  if (req.user.role === 'USER') {
+    delete ticketObject.adminNotes;
+    delete ticketObject.adminFollowUpReason;
+  }
+
+  // Sanitize internal admin follow-up audit trail entries from customer view
+  let filteredHistory = history;
+  if (req.user.role === 'USER') {
+    filteredHistory = history.filter((h) => !['ADMIN_FOLLOWUP_REQUIRED', 'ADMIN_FOLLOWUP_UPDATED', 'ADMIN_FOLLOWUP_RESOLVED'].includes(h.action));
+  }
+
+  sendSuccess(res, { ticket: ticketObject, comments, history: filteredHistory, customerHistorySummary }, 'Ticket details retrieved successfully');
+});
+
+/**
+ * @desc    Get complete service request history for a specific customer
+ * @route   GET /api/tickets/customer/:customerId/history
+ * @access  Private (STAFF, ADMIN, or Self)
+ */
+const getCustomerHistory = asyncHandler(async (req, res) => {
+  const { customerId } = req.params;
+
+  if (req.user.role === 'USER' && req.user._id.toString() !== customerId) {
+    return sendError(res, 'Not authorized to view other customer records', 403);
+  }
+
+  const customer = await User.findById(customerId).select('name email role status createdAt department');
+  if (!customer) {
+    return sendError(res, 'Customer account not found', 404);
+  }
+
+  const tickets = await Ticket.find({ createdBy: customerId })
+    .populate('assignedTo', 'name email role')
+    .sort({ createdAt: -1 });
+
+  const summary = {
+    total: tickets.length,
+    open: tickets.filter((t) => ['PENDING', 'OPEN', 'ASSIGNED'].includes(t.status)).length,
+    inProgress: tickets.filter((t) => t.status === 'IN_PROGRESS').length,
+    resolved: tickets.filter((t) => t.status === 'RESOLVED').length,
+    closed: tickets.filter((t) => t.status === 'CLOSED').length
+  };
+
+  sendSuccess(res, {
+    customer,
+    summary,
+    recentTickets: tickets.slice(0, 5),
+    allTickets: tickets
+  }, 'Customer service history retrieved successfully');
 });
 
 /**
@@ -251,5 +333,6 @@ module.exports = {
   getTicketById,
   updateTicket,
   deleteTicket,
-  addComment
+  addComment,
+  getCustomerHistory
 };

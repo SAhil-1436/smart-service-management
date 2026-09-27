@@ -4,6 +4,7 @@ const {
   getAdminDashboardStats,
   getAnalyticsData,
   getAllUsers,
+  getUserHistory,
   updateUserRole,
   updateUserStatus,
   getStaffVerifications,
@@ -18,6 +19,7 @@ router.use(authorize('ADMIN'));
 router.get('/dashboard', getAdminDashboardStats);
 router.get('/analytics', getAnalyticsData);
 router.get('/users', getAllUsers);
+router.get('/users/:id/history', getUserHistory);
 router.put('/users/:id/role', updateUserRole);
 router.put('/users/:id/status', updateUserStatus);
 

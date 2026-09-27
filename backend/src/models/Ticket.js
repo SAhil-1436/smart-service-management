@@ -74,6 +74,75 @@ const ticketSchema = new mongoose.Schema(
       trim: true,
       default: ''
     },
+    resolvedAt: {
+      type: Date,
+      default: null
+    },
+    closedAt: {
+      type: Date,
+      default: null
+    },
+    closedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null
+    },
+    userSatisfaction: {
+      type: String,
+      enum: {
+        values: ['SATISFIED', 'UNSATISFIED', null],
+        message: '{VALUE} is not a valid satisfaction value'
+      },
+      default: null
+    },
+    reopenedReason: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    adminReviewRequired: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    adminReviewReason: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    flaggedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null
+    },
+    flaggedAt: {
+      type: Date,
+      default: null
+    },
+    adminFollowUpRequired: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    adminFollowUpReason: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    assignedAdmin: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null
+    },
+    adminFollowUpAt: {
+      type: Date,
+      default: null
+    },
+    adminNotes: {
+      type: String,
+      trim: true,
+      default: ''
+    },
     rejectionReason: {
       type: String,
       trim: true,
@@ -112,5 +181,7 @@ const ticketSchema = new mongoose.Schema(
 // Compound Indexes for fast dashboard filtering and chronological user history
 ticketSchema.index({ status: 1, assignedTo: 1 });
 ticketSchema.index({ createdBy: 1, createdAt: -1 });
+ticketSchema.index({ adminReviewRequired: 1, createdAt: -1 });
+ticketSchema.index({ adminFollowUpRequired: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Ticket', ticketSchema);

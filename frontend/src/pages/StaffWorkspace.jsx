@@ -2,13 +2,30 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Navigation from '../components/Navigation';
-import { CheckSquare, UserCheck, AlertCircle, ChevronRight, Clock, CheckCircle2, UserPlus, FileText, Check, X, Building, MapPin } from 'lucide-react';
+import {
+  CheckSquare,
+  UserCheck,
+  AlertCircle,
+  ChevronRight,
+  Clock,
+  CheckCircle2,
+  UserPlus,
+  FileText,
+  Check,
+  X,
+  Building,
+  MapPin,
+  Flag,
+  RotateCcw,
+  AlertTriangle
+} from 'lucide-react';
 
 export default function StaffWorkspace() {
   const [assignedTickets, setAssignedTickets] = useState([]);
   const [unassignedTickets, setUnassignedTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState('ALL');
   const navigate = useNavigate();
 
   // Resolution Notes Modal State
@@ -21,6 +38,11 @@ export default function StaffWorkspace() {
   const [rejectionCategory, setRejectionCategory] = useState('Not my department');
   const [customRejectionDetails, setCustomRejectionDetails] = useState('');
   const [isSubmittingRejection, setIsSubmittingRejection] = useState(false);
+
+  // Flag for Admin Review Modal State (Part 6)
+  const [flaggingTicket, setFlaggingTicket] = useState(null);
+  const [flagReason, setFlagReason] = useState('');
+  const [isSubmittingFlag, setIsSubmittingFlag] = useState(false);
 
   useEffect(() => {
     fetchStaffWorkqueue();
@@ -144,10 +166,48 @@ export default function StaffWorkspace() {
     }
   };
 
+  // Staff Flags Ticket for Admin Review (Part 6)
+  const handleInitiateFlag = (ticket) => {
+    setFlaggingTicket(ticket);
+    setFlagReason('');
+  };
+
+  const handleSubmitFlag = async (e) => {
+    e.preventDefault();
+    if (!flaggingTicket) return;
+    if (!flagReason.trim()) {
+      alert('Please enter a clear reason for administrative review.');
+      return;
+    }
+
+    setIsSubmittingFlag(true);
+    try {
+      const response = await api.put(`/tickets/${flaggingTicket._id}/flag`, { reason: flagReason.trim() });
+      if (response.data.success) {
+        setFlaggingTicket(null);
+        setFlagReason('');
+        fetchStaffWorkqueue();
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to flag ticket for review');
+    } finally {
+      setIsSubmittingFlag(false);
+    }
+  };
+
   // Metrics
   const totalAssigned = assignedTickets.length;
   const inProgressCount = assignedTickets.filter((t) => t.status === 'IN_PROGRESS').length;
   const resolvedCount = assignedTickets.filter((t) => t.status === 'RESOLVED' || t.status === 'CLOSED').length;
+  const flaggedCount = assignedTickets.filter((t) => t.adminReviewRequired).length;
+
+  // Filtered Tickets by Tab
+  const filteredTickets = assignedTickets.filter((t) => {
+    if (activeTab === 'IN_PROGRESS') return t.status === 'IN_PROGRESS';
+    if (activeTab === 'RESOLVED') return t.status === 'RESOLVED' || t.status === 'CLOSED';
+    if (activeTab === 'FLAGGED') return t.adminReviewRequired;
+    return true;
+  });
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: 'var(--color-bg)', paddingBottom: '3rem' }}>
@@ -170,7 +230,7 @@ export default function StaffWorkspace() {
         )}
 
         {/* Staff Workload KPI Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
           <div className="card" style={{ padding: '1.25rem', borderLeft: '4px solid #F59E0B' }}>
             <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>Unassigned Queue</div>
             <div style={{ fontSize: '1.75rem', fontWeight: 700, color: '#D97706', marginTop: '0.2rem' }}>{unassignedTickets.length}</div>
@@ -189,6 +249,11 @@ export default function StaffWorkspace() {
           <div className="card" style={{ padding: '1.25rem', borderLeft: '4px solid var(--color-success)' }}>
             <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>Resolved / Closed</div>
             <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--color-success-text)', marginTop: '0.2rem' }}>{resolvedCount}</div>
+          </div>
+
+          <div className="card" style={{ padding: '1.25rem', borderLeft: '4px solid #EF4444' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>Flagged for Review</div>
+            <div style={{ fontSize: '1.75rem', fontWeight: 700, color: '#DC2626', marginTop: '0.2rem' }}>{flaggedCount}</div>
           </div>
         </div>
 
@@ -220,110 +285,128 @@ export default function StaffWorkspace() {
                       </span>
                     </div>
                     <div style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--color-text-primary)' }}>{ticket.title}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      <span>Client: <strong>{ticket.createdBy?.name}</strong></span>
-                      {ticket.department && <span>Dept: <strong>{ticket.department}</strong></span>}
-                      {ticket.location && <span>Loc: <strong>{ticket.location}</strong></span>}
+                    <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <span>Requester: {ticket.createdBy?.name}</span>
+                      {ticket.location && <span>• Location: {ticket.location}</span>}
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => handleClaimTicket(ticket._id)}
-                    style={{ padding: '0.5rem 1rem', backgroundColor: 'var(--color-accent)', color: '#fff', fontSize: '0.85rem', fontWeight: 600 }}
-                  >
-                    Claim Ticket
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <button
+                      onClick={() => navigate(`/tickets/${ticket._id}`)}
+                      style={{ padding: '0.4rem 0.75rem', backgroundColor: 'var(--color-bg)', color: 'var(--color-primary)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', fontSize: '0.8rem', cursor: 'pointer' }}
+                    >
+                      View Details
+                    </button>
+                    <button
+                      onClick={() => handleClaimTicket(ticket._id)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.45rem 1rem', backgroundColor: 'var(--color-primary)', color: '#fff', fontSize: '0.8rem', fontWeight: 600, borderRadius: 'var(--radius-md)' }}
+                    >
+                      <UserCheck size={14} /> Claim Ticket
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        {/* My Assigned Tickets */}
+        {/* Assigned Tickets Workspace with Filter Tabs */}
         <div className="card">
-          <h2 style={{ fontSize: '1.1rem', color: 'var(--color-primary)', marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <UserCheck size={18} color="var(--color-accent)" /> My Assigned Workspace Queue
-            </span>
-            <span className="badge badge-open">{assignedTickets.length} Assigned</span>
-          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.75rem' }}>
+            <h2 style={{ fontSize: '1.1rem', color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+              <FileText size={18} color="var(--color-accent)" /> My Assigned Tickets Workspace
+            </h2>
 
-          {assignedTickets.length === 0 ? (
+            {/* Filter Tabs (Part 10) */}
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                onClick={() => setActiveTab('ALL')}
+                style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem', fontWeight: 600, borderRadius: 'var(--radius-sm)', border: 'none', backgroundColor: activeTab === 'ALL' ? 'var(--color-primary)' : 'var(--color-bg)', color: activeTab === 'ALL' ? '#fff' : 'var(--color-text-secondary)', cursor: 'pointer' }}
+              >
+                All ({totalAssigned})
+              </button>
+              <button
+                onClick={() => setActiveTab('IN_PROGRESS')}
+                style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem', fontWeight: 600, borderRadius: 'var(--radius-sm)', border: 'none', backgroundColor: activeTab === 'IN_PROGRESS' ? 'var(--color-primary)' : 'var(--color-bg)', color: activeTab === 'IN_PROGRESS' ? '#fff' : 'var(--color-text-secondary)', cursor: 'pointer' }}
+              >
+                In Progress ({inProgressCount})
+              </button>
+              <button
+                onClick={() => setActiveTab('RESOLVED')}
+                style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem', fontWeight: 600, borderRadius: 'var(--radius-sm)', border: 'none', backgroundColor: activeTab === 'RESOLVED' ? 'var(--color-primary)' : 'var(--color-bg)', color: activeTab === 'RESOLVED' ? '#fff' : 'var(--color-text-secondary)', cursor: 'pointer' }}
+              >
+                Resolved ({resolvedCount})
+              </button>
+              <button
+                onClick={() => setActiveTab('FLAGGED')}
+                style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem', fontWeight: 600, borderRadius: 'var(--radius-sm)', border: 'none', backgroundColor: activeTab === 'FLAGGED' ? '#DC2626' : 'var(--color-bg)', color: activeTab === 'FLAGGED' ? '#fff' : '#DC2626', cursor: 'pointer' }}
+              >
+                Flagged for Review ({flaggedCount})
+              </button>
+            </div>
+          </div>
+
+          {filteredTickets.length === 0 ? (
             <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
-              You currently have no tickets assigned to you. Claim an item from the unassigned queue above!
+              No tickets found in this tab.
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {assignedTickets.map((ticket) => (
-                <div key={ticket._id} style={{ padding: '1.25rem', backgroundColor: '#fff', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-sm)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ fontWeight: 700, color: 'var(--color-primary)' }}>{ticket.ticketNumber}</span>
-                      <span className={`badge badge-${ticket.status.toLowerCase()}`}>{ticket.status}</span>
-                    </div>
-                    <button
-                      onClick={() => navigate(`/tickets/${ticket._id}`)}
-                      style={{ padding: '0.35rem 0.75rem', backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)', fontSize: '0.8rem', color: 'var(--color-text-primary)' }}
-                    >
-                      View Thread <ChevronRight size={14} />
-                    </button>
-                  </div>
-
-                  <h3 style={{ fontSize: '1.05rem', color: 'var(--color-text-primary)', marginBottom: '0.5rem', fontWeight: 600 }}>
-                    {ticket.title}
-                  </h3>
-                  <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '0.75rem' }}>
-                    {ticket.description}
-                  </p>
-
-                  {ticket.resolutionNotes && (
-                    <div style={{ padding: '0.5rem 0.75rem', backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 'var(--radius-md)', fontSize: '0.8rem', color: '#065F46', marginBottom: '0.75rem' }}>
-                      <strong>Resolution Notes:</strong> {ticket.resolutionNotes}
+              {filteredTickets.map((ticket) => (
+                <div key={ticket._id} style={{ padding: '1.25rem', backgroundColor: 'var(--color-bg)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                  
+                  {/* Banners for Flagged or Reopened Tickets */}
+                  {ticket.adminReviewRequired && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.75rem', backgroundColor: '#FEE2E2', border: '1px solid #FCA5A5', borderRadius: '4px', color: '#991B1B', fontSize: '0.75rem', fontWeight: 600, marginBottom: '0.75rem' }}>
+                      <AlertTriangle size={14} color="#DC2626" /> Flagged for Admin Review: {ticket.adminReviewReason}
                     </div>
                   )}
 
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--color-border)', paddingTop: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
-                      Client: <strong>{ticket.createdBy?.name}</strong> ({ticket.createdBy?.email})
+                  {ticket.reopenedReason && ticket.status === 'IN_PROGRESS' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.75rem', backgroundColor: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: '4px', color: '#92400E', fontSize: '0.75rem', fontWeight: 600, marginBottom: '0.75rem' }}>
+                      <RotateCcw size={14} color="#D97706" /> Customer Feedback: "{ticket.reopenedReason}"
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                        <strong style={{ color: 'var(--color-primary)', fontSize: '1rem' }}>{ticket.ticketNumber}</strong>
+                        <span className={`badge badge-${ticket.status.toLowerCase()}`}>{ticket.status}</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>• {ticket.category}</span>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: ticket.priority === 'URGENT' || ticket.priority === 'HIGH' ? 'var(--color-danger-text)' : 'var(--color-text-secondary)' }}>
+                          {ticket.priority}
+                        </span>
+                      </div>
+                      <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--color-text-primary)', margin: 0 }}>
+                        {ticket.title}
+                      </h3>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', marginTop: '0.35rem' }}>
+                        Requester: <strong>{ticket.createdBy?.name}</strong> ({ticket.createdBy?.email})
+                        {ticket.location && ` • Location: ${ticket.location}`}
+                      </div>
                     </div>
 
-                    {/* Sequential Status Progression Action Controls */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <button
+                        onClick={() => navigate(`/tickets/${ticket._id}`)}
+                        style={{ padding: '0.4rem 0.75rem', backgroundColor: 'var(--color-bg)', color: 'var(--color-primary)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', fontSize: '0.8rem', cursor: 'pointer' }}
+                      >
+                        Timeline & Details
+                      </button>
+
                       {ticket.status === 'ASSIGNED' && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
                           <button
                             onClick={() => handleAcceptTicket(ticket)}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '0.35rem',
-                              padding: '0.4rem 0.85rem',
-                              backgroundColor: '#059669',
-                              color: '#fff',
-                              fontSize: '0.8rem',
-                              fontWeight: 600,
-                              borderRadius: 'var(--radius-md)',
-                              border: 'none',
-                              cursor: 'pointer'
-                            }}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.85rem', backgroundColor: '#059669', color: '#fff', fontSize: '0.8rem', fontWeight: 600, borderRadius: 'var(--radius-md)', border: 'none', cursor: 'pointer' }}
                           >
                             <Check size={14} /> ACCEPT
                           </button>
                           <button
                             onClick={() => handleInitiateRejection(ticket)}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '0.35rem',
-                              padding: '0.4rem 0.85rem',
-                              backgroundColor: '#fff',
-                              color: '#DC2626',
-                              fontSize: '0.8rem',
-                              fontWeight: 600,
-                              borderRadius: 'var(--radius-md)',
-                              border: '1px solid #DC2626',
-                              cursor: 'pointer'
-                            }}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.85rem', backgroundColor: '#fff', color: '#DC2626', fontSize: '0.8rem', fontWeight: 600, borderRadius: 'var(--radius-md)', border: '1px solid #DC2626', cursor: 'pointer' }}
                           >
                             <X size={14} /> REJECT
                           </button>
@@ -331,17 +414,28 @@ export default function StaffWorkspace() {
                       )}
 
                       {ticket.status === 'IN_PROGRESS' && (
-                        <button
-                          onClick={() => handleInitiateStatusChange(ticket, 'RESOLVED')}
-                          style={{ padding: '0.4rem 0.8rem', backgroundColor: '#10B981', color: '#fff', fontSize: '0.8rem', fontWeight: 600, borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
-                        >
-                          <CheckCircle2 size={15} /> Resolve Ticket with Notes
-                        </button>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <button
+                            onClick={() => handleInitiateStatusChange(ticket, 'RESOLVED')}
+                            style={{ padding: '0.4rem 0.8rem', backgroundColor: '#10B981', color: '#fff', fontSize: '0.8rem', fontWeight: 600, borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', border: 'none' }}
+                          >
+                            <CheckCircle2 size={15} /> Resolve with Notes
+                          </button>
+
+                          {!ticket.adminReviewRequired && (
+                            <button
+                              onClick={() => handleInitiateFlag(ticket)}
+                              style={{ padding: '0.4rem 0.75rem', backgroundColor: '#FFFBEB', color: '#B45309', border: '1px solid #FCD34D', fontSize: '0.8rem', fontWeight: 600, borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}
+                            >
+                              <Flag size={14} /> Flag for Admin
+                            </button>
+                          )}
+                        </div>
                       )}
 
                       {ticket.status === 'RESOLVED' && (
                         <span style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                          <Check size={16} /> Resolved (Awaiting User Confirmation)
+                          <Check size={16} /> Resolved (Awaiting User Acceptance)
                         </span>
                       )}
 
@@ -359,13 +453,13 @@ export default function StaffWorkspace() {
         </div>
       </main>
 
-      {/* Resolution Notes Modal */}
+      {/* Resolution Notes Modal (Part 5) */}
       {resolvingTicket && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.5)', padding: '1rem' }}>
           <div className="card" style={{ width: '100%', maxWidth: '550px', backgroundColor: '#fff', padding: '1.75rem', borderRadius: 'var(--radius-lg)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <h2 style={{ fontSize: '1.2rem', color: 'var(--color-primary)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <CheckCircle2 size={20} color="#10B981" /> Provide Resolution Notes
+                <CheckCircle2 size={20} color="#10B981" /> Provide Resolution Documentation
               </h2>
               <button onClick={() => setResolvingTicket(null)} style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)' }}>
                 <X size={20} />
@@ -373,7 +467,7 @@ export default function StaffWorkspace() {
             </div>
 
             <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '1rem' }}>
-              Document the resolution steps, repairs, or outcome for ticket <strong>{resolvingTicket.ticketNumber}</strong> before marking it as RESOLVED.
+              Document the solution, action taken, and outcome for ticket <strong>{resolvingTicket.ticketNumber}</strong> before marking it as RESOLVED.
             </p>
 
             <form onSubmit={handleSubmitResolution}>
@@ -385,7 +479,7 @@ export default function StaffWorkspace() {
                   value={resolutionNotes}
                   onChange={(e) => setResolutionNotes(e.target.value)}
                   rows={4}
-                  placeholder="Describe the fix, replacement parts, or investigative findings..."
+                  placeholder="Example: Network router configuration was corrected and connectivity was restored..."
                   required
                   style={{ width: '100%', padding: '0.75rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', fontSize: '0.875rem', fontFamily: 'inherit', outline: 'none' }}
                 />
@@ -448,14 +542,14 @@ export default function StaffWorkspace() {
 
               <div style={{ marginBottom: '1.25rem' }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: '0.35rem' }}>
-                  Additional Explanation / Notes
+                  Additional Notes (Optional)
                 </label>
                 <textarea
                   value={customRejectionDetails}
                   onChange={(e) => setCustomRejectionDetails(e.target.value)}
                   rows={3}
-                  placeholder="Provide context for the administrator (e.g. requires specialized certification)..."
-                  style={{ width: '100%', padding: '0.75rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', fontSize: '0.875rem', fontFamily: 'inherit', outline: 'none' }}
+                  placeholder="Provide context for the dispatcher..."
+                  style={{ width: '100%', padding: '0.625rem 0.75rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', fontSize: '0.875rem', fontFamily: 'inherit' }}
                 />
               </div>
 
@@ -463,14 +557,14 @@ export default function StaffWorkspace() {
                 <button
                   type="button"
                   onClick={() => setRejectingTicket(null)}
-                  style={{ padding: '0.625rem 1.25rem', backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text-primary)', cursor: 'pointer', borderRadius: 'var(--radius-md)' }}
+                  style={{ padding: '0.625rem 1.25rem', backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmittingRejection}
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.625rem 1.25rem', backgroundColor: '#DC2626', color: '#fff', fontWeight: 600, borderRadius: 'var(--radius-md)', border: 'none', cursor: 'pointer', opacity: isSubmittingRejection ? 0.7 : 1 }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.625rem 1.25rem', backgroundColor: '#DC2626', color: '#fff', fontWeight: 600 }}
                 >
                   <X size={16} /> {isSubmittingRejection ? 'Rejecting...' : 'Confirm Rejection'}
                 </button>
@@ -479,7 +573,60 @@ export default function StaffWorkspace() {
           </div>
         </div>
       )}
+
+      {/* Flag for Admin Review Modal (Part 6) */}
+      {flaggingTicket && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(15, 23, 42, 0.5)', padding: '1rem' }}>
+          <div className="card" style={{ width: '100%', maxWidth: '520px', backgroundColor: '#fff', padding: '1.75rem', borderRadius: 'var(--radius-lg)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h2 style={{ fontSize: '1.2rem', color: '#DC2626', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Flag size={20} color="#DC2626" /> Flag Ticket for Administrative Review
+              </h2>
+              <button onClick={() => setFlaggingTicket(null)} style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '1.25rem' }}>
+              If ticket <strong>{flaggingTicket.ticketNumber}</strong> is repetitive, clearly duplicate, or requires administrative decision, document the reason below:
+            </p>
+
+            <form onSubmit={handleSubmitFlag}>
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: '0.35rem' }}>
+                  Escalation Reason *
+                </label>
+                <textarea
+                  value={flagReason}
+                  onChange={(e) => setFlagReason(e.target.value)}
+                  rows={4}
+                  required
+                  placeholder="Example: Customer has submitted multiple tickets regarding the same resolved issue; or duplicate requests detected..."
+                  style={{ width: '100%', padding: '0.75rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', fontSize: '0.875rem', fontFamily: 'inherit' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setFlaggingTicket(null)}
+                  style={{ padding: '0.625rem 1.25rem', backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingFlag || !flagReason.trim()}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.625rem 1.25rem', backgroundColor: '#DC2626', color: '#fff', fontWeight: 600 }}
+                >
+                  <Flag size={16} /> {isSubmittingFlag ? 'Flagging...' : 'Submit Flag'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
-

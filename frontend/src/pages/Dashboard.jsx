@@ -3,7 +3,21 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import CreateTicketModal from '../components/CreateTicketModal';
-import { LogOut, User, Plus, Search, Ticket, Server, CheckCircle2, Clock, AlertCircle, RefreshCw, ChevronRight } from 'lucide-react';
+import {
+  LogOut,
+  User,
+  Plus,
+  Search,
+  Ticket,
+  Server,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  RefreshCw,
+  ChevronRight,
+  RotateCcw,
+  Bell
+} from 'lucide-react';
 
 import Navigation from '../components/Navigation';
 
@@ -59,7 +73,6 @@ export default function Dashboard() {
   // Metric Computations
   const totalCount = tickets.length;
   const pendingCount = tickets.filter((t) => t.status === 'PENDING' || t.status === 'OPEN').length;
-  const assignedCount = tickets.filter((t) => t.status === 'ASSIGNED').length;
   const inProgressCount = tickets.filter((t) => t.status === 'IN_PROGRESS').length;
   const resolvedCount = tickets.filter((t) => t.status === 'RESOLVED').length;
   const closedCount = tickets.filter((t) => t.status === 'CLOSED').length;
@@ -71,6 +84,29 @@ export default function Dashboard() {
       {/* Main Container */}
       <main style={{ maxWidth: '1150px', margin: '2rem auto 0 auto', padding: '0 1rem' }}>
         
+        {/* User Action Banner if resolutions await customer confirmation (Part 4 & 10) */}
+        {user?.role === 'USER' && resolvedCount > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.25rem', backgroundColor: '#ECFDF5', border: '1.5px solid #10B981', borderRadius: 'var(--radius-md)', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <Bell size={20} color="#059669" />
+              <div>
+                <strong style={{ color: '#065F46', fontSize: '0.95rem' }}>
+                  Action Required: {resolvedCount} request{resolvedCount > 1 ? 's have' : ' has'} been marked as RESOLVED by support.
+                </strong>
+                <p style={{ color: '#047857', fontSize: '0.8rem', margin: 0 }}>
+                  Please inspect the resolution details to confirm satisfaction and close the ticket, or request further assistance.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setStatusFilter('RESOLVED')}
+              style={{ padding: '0.4rem 0.85rem', backgroundColor: '#059669', color: '#fff', fontSize: '0.8rem', fontWeight: 600, borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer' }}
+            >
+              Filter Awaiting Review ({resolvedCount})
+            </button>
+          </div>
+        )}
+
         {/* Header Action Bar */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
@@ -85,14 +121,14 @@ export default function Dashboard() {
           {user?.role === 'USER' && (
             <button
               onClick={() => setIsModalOpen(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.625rem 1.25rem', backgroundColor: 'var(--color-primary)', color: '#fff', fontWeight: 600, fontSize: '0.875rem', borderRadius: 'var(--radius-md)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.625rem 1.25rem', backgroundColor: 'var(--color-primary)', color: '#fff', fontWeight: 600, fontSize: '0.875rem', borderRadius: 'var(--radius-md)', border: 'none', cursor: 'pointer' }}
             >
               <Plus size={18} /> New Service Ticket
             </button>
           )}
         </div>
 
-        {/* KPI Metrics Cards */}
+        {/* KPI Metrics Cards (Part 10) */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
           <div className="card" style={{ padding: '1.15rem' }}>
             <div style={{ fontSize: '0.725rem', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>Total Tickets</div>
@@ -100,13 +136,8 @@ export default function Dashboard() {
           </div>
 
           <div className="card" style={{ padding: '1.15rem', borderLeft: '4px solid #6366F1' }}>
-            <div style={{ fontSize: '0.725rem', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>Pending / Open</div>
+            <div style={{ fontSize: '0.725rem', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>Pending</div>
             <div style={{ fontSize: '1.65rem', fontWeight: 700, color: '#4338CA', marginTop: '0.2rem' }}>{pendingCount}</div>
-          </div>
-
-          <div className="card" style={{ padding: '1.15rem', borderLeft: '4px solid #3B82F6' }}>
-            <div style={{ fontSize: '0.725rem', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>Assigned</div>
-            <div style={{ fontSize: '1.65rem', fontWeight: 700, color: '#1D4ED8', marginTop: '0.2rem' }}>{assignedCount}</div>
           </div>
 
           <div className="card" style={{ padding: '1.15rem', borderLeft: '4px solid var(--color-warning)' }}>
@@ -114,9 +145,16 @@ export default function Dashboard() {
             <div style={{ fontSize: '1.65rem', fontWeight: 700, color: 'var(--color-warning-text)', marginTop: '0.2rem' }}>{inProgressCount}</div>
           </div>
 
-          <div className="card" style={{ padding: '1.15rem', borderLeft: '4px solid var(--color-success)' }}>
-            <div style={{ fontSize: '0.725rem', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>Resolved / Closed</div>
-            <div style={{ fontSize: '1.65rem', fontWeight: 700, color: 'var(--color-success-text)', marginTop: '0.2rem' }}>{resolvedCount + closedCount}</div>
+          <div className="card" style={{ padding: '1.15rem', borderLeft: '4px solid #10B981', backgroundColor: resolvedCount > 0 ? '#F0FDF4' : 'transparent' }}>
+            <div style={{ fontSize: '0.725rem', fontWeight: 600, color: '#065F46', textTransform: 'uppercase' }}>
+              {user?.role === 'USER' ? 'Awaiting My Review' : 'Resolved'}
+            </div>
+            <div style={{ fontSize: '1.65rem', fontWeight: 700, color: '#059669', marginTop: '0.2rem' }}>{resolvedCount}</div>
+          </div>
+
+          <div className="card" style={{ padding: '1.15rem', borderLeft: '4px solid var(--color-text-secondary)' }}>
+            <div style={{ fontSize: '0.725rem', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase' }}>Closed & Archived</div>
+            <div style={{ fontSize: '1.65rem', fontWeight: 700, color: 'var(--color-text-secondary)', marginTop: '0.2rem' }}>{closedCount}</div>
           </div>
         </div>
 
@@ -137,7 +175,7 @@ export default function Dashboard() {
             </div>
 
             {/* Status Filter */}
-            <div style={{ width: '160px' }}>
+            <div style={{ width: '180px' }}>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
@@ -147,7 +185,7 @@ export default function Dashboard() {
                 <option value="PENDING">PENDING</option>
                 <option value="ASSIGNED">ASSIGNED</option>
                 <option value="IN_PROGRESS">IN_PROGRESS</option>
-                <option value="RESOLVED">RESOLVED</option>
+                <option value="RESOLVED">RESOLVED (Action Required)</option>
                 <option value="CLOSED">CLOSED</option>
               </select>
             </div>
@@ -165,13 +203,14 @@ export default function Dashboard() {
                 <option value="Account">Account</option>
                 <option value="Hardware">Hardware</option>
                 <option value="Software">Software</option>
+                <option value="Network">Network</option>
                 <option value="General">General</option>
               </select>
             </div>
 
             <button
               type="submit"
-              style={{ padding: '0.5rem 1rem', backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', color: 'var(--color-text-primary)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+              style={{ padding: '0.5rem 1rem', backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', color: 'var(--color-text-primary)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}
             >
               <RefreshCw size={14} /> Search
             </button>
@@ -212,7 +251,7 @@ export default function Dashboard() {
                 </thead>
                 <tbody>
                   {tickets.map((t) => (
-                    <tr key={t._id} style={{ borderBottom: '1px solid var(--color-border)', transition: 'background-color 0.15s ease' }}>
+                    <tr key={t._id} style={{ borderBottom: '1px solid var(--color-border)', backgroundColor: t.status === 'RESOLVED' && user?.role === 'USER' ? '#F0FDF4' : 'transparent', transition: 'background-color 0.15s ease' }}>
                       <td style={{ padding: '1rem 1.25rem', fontWeight: 600, color: 'var(--color-primary)' }}>
                         {t.ticketNumber}
                       </td>
@@ -230,6 +269,11 @@ export default function Dashboard() {
                       </td>
                       <td style={{ padding: '1rem 1.25rem' }}>
                         <span className={`badge badge-${t.status.toLowerCase()}`}>{t.status}</span>
+                        {t.status === 'RESOLVED' && user?.role === 'USER' && (
+                          <div style={{ fontSize: '0.7rem', color: '#059669', fontWeight: 700, marginTop: '0.2rem' }}>
+                            Action Required
+                          </div>
+                        )}
                       </td>
                       <td style={{ padding: '1rem 1.25rem', color: 'var(--color-text-secondary)', fontSize: '0.8rem' }}>
                         {new Date(t.createdAt).toLocaleDateString()}
@@ -237,9 +281,9 @@ export default function Dashboard() {
                       <td style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>
                         <button
                           onClick={() => navigate(`/tickets/${t._id}`)}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.75rem', backgroundColor: 'var(--color-accent-light)', color: 'var(--color-accent)', fontWeight: 600, fontSize: '0.8rem' }}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.75rem', backgroundColor: t.status === 'RESOLVED' && user?.role === 'USER' ? '#059669' : 'var(--color-accent-light)', color: t.status === 'RESOLVED' && user?.role === 'USER' ? '#fff' : 'var(--color-accent)', fontWeight: 600, fontSize: '0.8rem', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer' }}
                         >
-                          View <ChevronRight size={14} />
+                          {t.status === 'RESOLVED' && user?.role === 'USER' ? 'Review & Close' : 'View'} <ChevronRight size={14} />
                         </button>
                       </td>
                     </tr>
